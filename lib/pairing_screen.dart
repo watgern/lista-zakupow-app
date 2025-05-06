@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:moj_pierszy_projekt/widgets/app_drawer.dart';
 
 class PairingScreen extends StatefulWidget {
   @override
@@ -106,6 +107,7 @@ class _PairingScreenState extends State<PairingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Parowanie kont")),
+      drawer: const AppDrawer(),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(

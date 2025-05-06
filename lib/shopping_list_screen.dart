@@ -1,7 +1,8 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'update_screen.dart';
+import 'package:moj_pierszy_projekt/widgets/app_drawer.dart';
 
 const Map<String, IconData> categoryIcons = {
   "shopping_cart": Icons.shopping_cart,
@@ -53,6 +54,14 @@ class Category {
       iconKey: data['icon'] as String,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Category && runtimeType == other.runtimeType && id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
 class NotificationItem {
@@ -84,12 +93,9 @@ class ShoppingListScreen extends StatefulWidget {
 
 class _ShoppingListScreenState extends State<ShoppingListScreen> {
   final TextEditingController _nameController = TextEditingController();
-  final CollectionReference itemsCollection =
-      FirebaseFirestore.instance.collection('shoppingItems');
-  final CollectionReference categoriesCollection =
-      FirebaseFirestore.instance.collection('categories');
-  final CollectionReference notificationsCollection =
-      FirebaseFirestore.instance.collection('notifications');
+  final CollectionReference itemsCollection = FirebaseFirestore.instance.collection('shoppingItems');
+  final CollectionReference categoriesCollection = FirebaseFirestore.instance.collection('categories');
+  final CollectionReference notificationsCollection = FirebaseFirestore.instance.collection('notifications');
 
   Category? _selectedCategory;
   int _unreadNotifications = 0;
@@ -98,6 +104,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   void initState() {
     super.initState();
     _loadUnreadNotificationCount();
+    _checkAndPromptFirstCategory();
   }
 
   Future<void> _loadUnreadNotificationCount() async {
@@ -118,16 +125,38 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return [];
 
-    final doc = await FirebaseFirestore.instance
-        .collection('pairedUsers')
-        .doc(currentUser.uid)
-        .get();
-
+    final doc = await FirebaseFirestore.instance.collection('pairedUsers').doc(currentUser.uid).get();
     if (doc.exists && doc.data()?['partner'] != null) {
       return [currentUser.uid, doc.data()!['partner']];
     }
-
     return [currentUser.uid];
+  }
+
+  Future<void> _checkAndPromptFirstCategory() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final snapshot = await categoriesCollection.where('owner', isEqualTo: user.uid).get();
+    if (snapshot.docs.isEmpty) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text("Brak kategorii"),
+          content: const Text("Stwórz swoją pierwszą kategorię, aby zacząć korzystać z aplikacji."),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/category');
+              },
+              child: const Text("Dodaj kategorię"),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   void _openNotifications() async {
@@ -139,9 +168,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         .orderBy('timestamp', descending: true)
         .get();
 
-    final notifications = query.docs
-        .map((doc) => NotificationItem.fromDoc(doc.data() as Map<String, dynamic>))
-        .toList();
+    final notifications = query.docs.map((doc) => NotificationItem.fromDoc(doc.data() as Map<String, dynamic>)).toList();
 
     final batch = FirebaseFirestore.instance.batch();
     for (final doc in query.docs) {
@@ -162,12 +189,9 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         if (notifications.isEmpty) {
           return const Padding(
             padding: EdgeInsets.all(24.0),
-            child: Center(
-              child: Text("Brak powiadomień"),
-            ),
+            child: Center(child: Text("Brak powiadomień")),
           );
         }
-
         return ListView(
           padding: const EdgeInsets.all(12),
           children: notifications.map((n) {
@@ -189,9 +213,9 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   void _addNewItem() {
     final name = _nameController.text.trim();
     if (name.isEmpty || _selectedCategory == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text("Proszę wybrać kategorię (nie 'Wszystkie kategorie')"),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Proszę wybrać kategorię (nie 'Wszystkie kategorie')")),
+      );
       return;
     }
 
@@ -207,7 +231,6 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         'icon': _selectedCategory!.iconKey,
       },
     });
-
     _nameController.clear();
   }
 
@@ -223,9 +246,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      return const Scaffold(
-        body: Center(child: Text("Użytkownik nie zalogowany")),
-      );
+      return const Scaffold(body: Center(child: Text("Użytkownik nie zalogowany")));
     }
 
     return Scaffold(
@@ -244,79 +265,21 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                   top: 10,
                   child: Container(
                     padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Text(
-                      '$_unreadNotifications',
-                      style: const TextStyle(color: Colors.white, fontSize: 10),
-                    ),
+                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                    child: Text('$_unreadNotifications', style: const TextStyle(color: Colors.white, fontSize: 10)),
                   ),
                 ),
             ],
           )
         ],
       ),
-      drawer: Drawer(
-        child: ListView(
-          children: [
-            DrawerHeader(
-              decoration: BoxDecoration(color: Theme.of(context).primaryColor),
-              child: const Text(
-                "Menu",
-                style: TextStyle(color: Colors.white, fontSize: 24),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.category),
-              title: const Text("Kategorie"),
-              onTap: () {
-                Navigator.pushNamed(context, '/category');
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.account_circle),
-              title: const Text("Konto"),
-              onTap: () {
-                Navigator.pushNamed(context, '/account');
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.link),
-              title: const Text("Parowanie kont"),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.pushNamed(context, '/pairing');
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.system_update),
-              title: const Text("Sprawdź wersję"),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const UpdateScreen()));
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.logout),
-              title: const Text("Wyloguj"),
-              onTap: () async {
-                await FirebaseAuth.instance.signOut();
-                Navigator.pop(context);
-              },
-            ),
-          ],
-        ),
-      ),
+drawer: const AppDrawer(),
       body: FutureBuilder<List<String>>(
         future: getPairedUIDs(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-
           final uidList = snapshot.data!;
 
           return Column(
@@ -324,22 +287,20 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
               Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: StreamBuilder<QuerySnapshot>(
-                  stream: categoriesCollection
-                      .where('owner', whereIn: uidList)
-                      .snapshots(),
+                  stream: categoriesCollection.where('owner', whereIn: uidList).snapshots(),
                   builder: (context, snapshot) {
                     if (snapshot.hasError) {
-                      return Center(
-                          child: Text("Błąd: ${snapshot.error.toString()}"));
+                      return Center(child: Text("Błąd: \${snapshot.error}"));
                     }
                     if (!snapshot.hasData) {
                       return const Center(child: CircularProgressIndicator());
                     }
 
-                    final categories = snapshot.data!.docs
-                        .map((doc) => Category.fromDoc(
-                            doc.id, doc.data() as Map<String, dynamic>))
-                        .toList();
+                    final categories = snapshot.data!.docs.map((doc) => Category.fromDoc(doc.id, doc.data() as Map<String, dynamic>)).toList();
+
+                    if (_selectedCategory != null && !categories.any((cat) => cat.id == _selectedCategory!.id)) {
+                      _selectedCategory = null;
+                    }
 
                     return Row(
                       children: [
@@ -358,8 +319,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                                   value: cat,
                                   child: Row(
                                     children: [
-                                      Icon(categoryIcons[cat.iconKey] ??
-                                          Icons.category),
+                                      Icon(categoryIcons[cat.iconKey] ?? Icons.category),
                                       const SizedBox(width: 8),
                                       Text(cat.name),
                                     ],
@@ -383,8 +343,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 child: TextField(
                   controller: _nameController,
-                  decoration:
-                      const InputDecoration(labelText: 'Nazwa przedmiotu'),
+                  decoration: const InputDecoration(labelText: 'Nazwa przedmiotu'),
                 ),
               ),
               ElevatedButton(
@@ -394,25 +353,17 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
               const Divider(),
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
-                  stream: itemsCollection
-                      .where('owner', whereIn: uidList)
-                      .snapshots(),
+                  stream: itemsCollection.where('owner', whereIn: uidList).snapshots(),
                   builder: (context, snapshot) {
                     if (!snapshot.hasData) {
                       return const Center(child: CircularProgressIndicator());
                     }
 
-                    final items = snapshot.data!.docs
-                        .map((doc) => ShoppingItem.fromDoc(
-                            doc.id, doc.data() as Map<String, dynamic>))
-                        .toList();
+                    final items = snapshot.data!.docs.map((doc) => ShoppingItem.fromDoc(doc.id, doc.data() as Map<String, dynamic>)).toList();
 
                     final filteredItems = _selectedCategory == null
                         ? items
-                        : items.where((item) {
-                            return item.category['name'] ==
-                                _selectedCategory!.name;
-                          }).toList();
+                        : items.where((item) => item.category['name'] == _selectedCategory!.name).toList();
 
                     filteredItems.sort((a, b) {
                       if (a.isChecked == b.isChecked) return 0;
@@ -430,26 +381,18 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                         return ListTile(
                           leading: Checkbox(
                             value: item.isChecked,
-                            onChanged: (val) =>
-                                _toggleItem(item, val ?? false),
+                            onChanged: (val) => _toggleItem(item, val ?? false),
                           ),
                           title: Text(
                             item.name,
                             style: TextStyle(
-                              color:
-                                  item.isChecked ? Colors.red : Colors.black,
-                              decoration: item.isChecked
-                                  ? TextDecoration.lineThrough
-                                  : TextDecoration.none,
+                              color: item.isChecked ? Colors.red : Colors.black,
+                              decoration: item.isChecked ? TextDecoration.lineThrough : TextDecoration.none,
                             ),
                           ),
                           subtitle: Row(
                             children: [
-                              Icon(
-                                categoryIcons[item.category['icon']] ??
-                                    Icons.category,
-                                size: 16,
-                              ),
+                              Icon(categoryIcons[item.category['icon']] ?? Icons.category, size: 16),
                               const SizedBox(width: 4),
                               Text(item.category['name']),
                             ],
@@ -463,7 +406,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                     );
                   },
                 ),
-              )
+              ),
             ],
           );
         },

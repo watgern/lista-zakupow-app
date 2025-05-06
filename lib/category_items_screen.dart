@@ -41,6 +41,39 @@ class _CategoryItemsScreenState extends State<CategoryItemsScreen> {
     return [uid];
   }
 
+  void _editItemDialog(ShoppingItem item) {
+    final TextEditingController nameController = TextEditingController(text: item.name);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edytuj przedmiot'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(labelText: 'Nazwa'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Anuluj'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newName = nameController.text.trim();
+              if (newName.isNotEmpty) {
+                await itemsCollection.doc(item.id).update({
+                  'name': newName,
+                });
+              }
+              Navigator.of(context).pop();
+            },
+            child: const Text('Zapisz'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final category = ModalRoute.of(context)!.settings.arguments as Category;
@@ -53,7 +86,7 @@ class _CategoryItemsScreenState extends State<CategoryItemsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text("Przedmioty - \${category.name}"),
+        title: Text("Przedmioty - ${category.name}"),
       ),
       body: FutureBuilder<List<String>>(
         future: getPairedUIDs(),
@@ -95,7 +128,7 @@ class _CategoryItemsScreenState extends State<CategoryItemsScreen> {
                   stream: query.snapshots(),
                   builder: (context, snapshot) {
                     if (snapshot.hasError) {
-                      return Center(child: Text("Błąd: \${snapshot.error}"));
+                      return Center(child: Text("Błąd: ${snapshot.error}"));
                     }
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
@@ -110,7 +143,7 @@ class _CategoryItemsScreenState extends State<CategoryItemsScreen> {
                       return a.isChecked ? 1 : -1;
                     });
                     if (items.isEmpty) {
-                      return Center(child: Text("Brak przedmiotów w kategorii: \${category.name}"));
+                      return Center(child: Text("Brak przedmiotów w kategorii: ${category.name}"));
                     }
                     return ListView.builder(
                       itemCount: items.length,
@@ -130,9 +163,18 @@ class _CategoryItemsScreenState extends State<CategoryItemsScreen> {
                                   : null,
                             ),
                           ),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete),
-                            onPressed: () => _deleteItem(item),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit),
+                                onPressed: () => _editItemDialog(item),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete),
+                                onPressed: () => _deleteItem(item),
+                              ),
+                            ],
                           ),
                         );
                       },

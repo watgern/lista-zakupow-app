@@ -1,6 +1,7 @@
 // lib/account_screen.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:moj_pierszy_projekt/widgets/app_drawer.dart';
 
 class AccountScreen extends StatelessWidget {
   const AccountScreen({Key? key}) : super(key: key);
@@ -12,6 +13,7 @@ class AccountScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text("Konto"),
       ),
+      drawer: const AppDrawer(),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: user != null

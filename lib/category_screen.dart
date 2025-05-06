@@ -3,12 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:moj_pierszy_projekt/models/category.dart';
+import 'package:reorderable_grid_view/reorderable_grid_view.dart';
+import 'package:moj_pierszy_projekt/widgets/app_drawer.dart';
 
 const Map<String, IconData> categoryIcons = {
   "shopping_cart": Icons.shopping_cart,
   "home": Icons.home,
   "local_florist": Icons.local_florist,
-  "flight": Icons.flight,
   "garden": Icons.grass,
   "travel": Icons.airplanemode_active,
 };
@@ -25,6 +26,8 @@ class _CategoryScreenState extends State<CategoryScreen> {
       FirebaseFirestore.instance.collection('categories');
   final TextEditingController _nameController = TextEditingController();
   String? _selectedIconKey;
+  List<Category> _categories = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -32,6 +35,29 @@ class _CategoryScreenState extends State<CategoryScreen> {
     if (categoryIcons.isNotEmpty) {
       _selectedIconKey = categoryIcons.keys.first;
     }
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    final List<String> uidList = await getPairedUIDs();
+
+    final snapshot = await categoriesCollection
+        .where('owner', whereIn: uidList)
+        .get();
+
+    final loadedCategories = snapshot.docs.map((doc) {
+      return Category.fromDoc(doc.id, doc.data() as Map<String, dynamic>);
+    }).toList();
+
+    loadedCategories.sort((a, b) => (a.order ?? 0).compareTo(b.order ?? 0));
+
+    setState(() {
+      _categories = loadedCategories;
+      _isLoading = false;
+    });
   }
 
   Future<List<String>> getPairedUIDs() async {
@@ -62,155 +88,164 @@ class _CategoryScreenState extends State<CategoryScreen> {
       appBar: AppBar(
         title: const Text("Zarządzaj kategoriami"),
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: FutureBuilder<List<String>>(
-              future: getPairedUIDs(),
-              builder: (context, uidSnapshot) {
-                if (!uidSnapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+      drawer: const AppDrawer(),
 
-                final List<String> uidList = uidSnapshot.data!;
-
-                return StreamBuilder<QuerySnapshot>(
-                  stream: categoriesCollection
-                      .where('owner', whereIn: uidList)
-                      .snapshots(),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (snapshot.hasError) {
-                      return Center(child: Text("Błąd: \${snapshot.error}"));
-                    }
-                    final docs = snapshot.data!.docs;
-                    final categories = docs.map((doc) {
-                      return Category.fromDoc(doc.id, doc.data() as Map<String, dynamic>);
-                    }).toList();
-
-                    return GridView.count(
-                      crossAxisCount: 2,
-                      childAspectRatio: 0.9,
-                      children: categories.map((cat) {
-                        return Card(
-                          margin: const EdgeInsets.all(8),
-                          elevation: 2,
-                          child: InkWell(
-                            onTap: () {
-                              Navigator.pushNamed(
-                                context,
-                                '/categoryItems',
-                                arguments: cat,
-                              );
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.all(8.0),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    categoryIcons[cat.iconKey] ?? Icons.category,
-                                    size: 48,
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    cat.name,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                        fontSize: 16, fontWeight: FontWeight.bold),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  ElevatedButton.icon(
-                                    icon: const Icon(Icons.delete, size: 16),
-                                    label: const Text("Usuń"),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.red,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 12, vertical: 4),
-                                      textStyle: const TextStyle(fontSize: 14),
-                                    ),
-                                    onPressed: () => _confirmDeleteCategory(cat),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-          const Divider(),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
               children: [
-                TextField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: "Nazwa kategorii",
-                  ),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 60,
-                  child: GridView.count(
-                    crossAxisCount: 6,
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: categoryIcons.keys.map((iconKey) {
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedIconKey = iconKey;
-                          });
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            border: _selectedIconKey == iconKey
-                                ? Border.all(
-                                    color: Theme.of(context).primaryColor, width: 2)
-                                : null,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(
-                            categoryIcons[iconKey],
-                            size: 24,
-                          ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: ReorderableGridView.builder(
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        childAspectRatio: 1,
+                      ),
+                      itemCount: _categories.length,
+                      itemBuilder: (context, index) => _buildCategoryCard(index),
+                      onReorder: _onReorder,
+                      dragWidgetBuilder: (index, child) => Transform.scale(
+                        scale: 1.1,
+                        child: Material(
+                          elevation: 12,
+                          borderRadius: BorderRadius.circular(12),
+                          color: Colors.transparent,
+                          child: child,
                         ),
-                      );
-                    }).toList(),
+                      ),
+                    ),
                   ),
                 ),
-                ElevatedButton(
-                  onPressed: _addCategory,
-                  child: const Text("Dodaj kategorię"),
+                const Divider(),
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Column(
+                    children: [
+                      TextField(
+                        controller: _nameController,
+                        decoration: const InputDecoration(
+                          labelText: "Nazwa kategorii",
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        height: 60,
+                        child: GridView.count(
+                          crossAxisCount: 6,
+                          physics: const NeverScrollableScrollPhysics(),
+                          children: categoryIcons.keys.map((iconKey) {
+                            return GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _selectedIconKey = iconKey;
+                                });
+                              },
+                              child: Container(
+                                margin: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  border: _selectedIconKey == iconKey
+                                      ? Border.all(
+                                          color: Theme.of(context).primaryColor, width: 2)
+                                      : null,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  categoryIcons[iconKey],
+                                  size: 24,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                      ElevatedButton(
+                        onPressed: _addCategory,
+                        child: const Text("Dodaj kategorię"),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
+    );
+  }
+
+  Widget _buildCategoryCard(int index) {
+    final cat = _categories[index];
+    return Card(
+      key: ValueKey(cat.id),
+      elevation: 2,
+      child: InkWell(
+        onTap: () {
+          Navigator.pushNamed(
+            context,
+            '/categoryItems',
+            arguments: cat,
+          );
+        },
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                categoryIcons[cat.iconKey] ?? Icons.category,
+                size: 48,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                cat.name,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red),
+                onPressed: () => _confirmDeleteCategory(cat),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  void _addCategory() {
+  void _onReorder(int oldIndex, int newIndex) async {
+    final Category item = _categories.removeAt(oldIndex);
+    _categories.insert(newIndex, item);
+
+    if (mounted) {
+      setState(() {});
+    }
+
+    final batch = FirebaseFirestore.instance.batch();
+    for (int i = 0; i < _categories.length; i++) {
+      final cat = _categories[i];
+      final docRef = categoriesCollection.doc(cat.id);
+      batch.update(docRef, {'order': i});
+    }
+    await batch.commit();
+  }
+
+  void _addCategory() async {
     final name = _nameController.text.trim();
     if (name.isEmpty || _selectedIconKey == null) return;
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return;
-    categoriesCollection.add({
+    await categoriesCollection.add({
       'name': name,
       'icon': _selectedIconKey,
       'owner': currentUser.uid,
+      'order': _categories.length,
     });
     _nameController.clear();
+    _categories.clear();
+    _isLoading = true;
+    _loadCategories();
   }
 
   void _confirmDeleteCategory(Category category) async {
@@ -218,7 +253,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Usuń kategorię'),
-        content: Text('Czy na pewno chcesz usunąć kategorię "\${category.name}"?'),
+        content: Text('Czy na pewno chcesz usunąć kategorię "${category.name}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -234,21 +269,9 @@ class _CategoryScreenState extends State<CategoryScreen> {
 
     if (shouldDelete == true) {
       await categoriesCollection.doc(category.id).delete();
-
-      final batch = FirebaseFirestore.instance.batch();
-      final query = await FirebaseFirestore.instance
-          .collection('shoppingItems')
-          .where('category.name', isEqualTo: category.name)
-          .get();
-
-      for (var doc in query.docs) {
-        batch.delete(doc.reference);
-      }
-      await batch.commit();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Kategoria "\${category.name}" została usunięta')),
-      );
+      _categories.clear();
+      _isLoading = true;
+      _loadCategories();
     }
   }
-} 
+}

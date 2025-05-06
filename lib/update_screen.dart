@@ -9,6 +9,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import 'package:dio/dio.dart';
+import 'package:moj_pierszy_projekt/widgets/app_drawer.dart';
+
 
 class UpdateScreen extends StatefulWidget {
   const UpdateScreen({Key? key}) : super(key: key);
@@ -99,6 +101,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Aktualizacja aplikacji")),
+      drawer: const AppDrawer(),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Padding(
@@ -141,6 +144,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
                       ),
                     ),
             ),
+
     );
   }
 }

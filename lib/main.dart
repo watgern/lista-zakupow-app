@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-
+import 'about_screen.dart';
 import 'login_screen.dart';
 import 'category_screen.dart';
 import 'account_screen.dart';
@@ -11,6 +11,8 @@ import 'category_items_screen.dart';
 import 'shopping_list_screen.dart';
 import 'update_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+
 
 
 void main() async {
@@ -63,6 +65,8 @@ class MyApp extends StatelessWidget {
         '/categoryItems': (context) => const CategoryItemsScreen(),
         '/shoppingList': (context) => const ShoppingListScreen(),
         '/update': (context) => const UpdateScreen(),
+        '/about': (context) => const AboutScreen(),
+
       },
     );
   }
@@ -132,7 +136,7 @@ class AuthWrapper extends StatelessWidget {
         }
 
         if (snapshot.hasData) {
-          return const ShoppingListScreen();
+          return const CategoryScreen();
         } else {
           return const LoginScreen();
         }
