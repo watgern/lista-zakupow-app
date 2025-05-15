@@ -1,13 +1,8 @@
 platform :ios, '13.0'
 
-# CocoaPods analytics disables
-ENV['COCOAPODS_DISABLE_STATS'] = 'true'
-
 use_frameworks!
 use_modular_headers!
 
-require_relative '../flutter_tools/bin/podhelper.rb'
-
 target 'Runner' do
-  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+  flutter_install_all_ios_pods(File.dirname(File.realpath(__FILE__)))
 end
